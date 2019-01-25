@@ -1,0 +1,102 @@
+language: bash
+
+env:
+  global:
+  - IMAGE_NAME=${DOCKER_USERNAME}/nomad-spark
+  - HADOOP_MAJMIN_VERSION=2.7
+
+matrix:
+  include:
+  - services: docker
+    env:
+    - SPARK_VERSION=2.4.0
+    - NOMAD_VERSION=0.8.6
+    - JAVA_MAJOR_VERSION=8
+    - SUFFIX=20181220
+    - LATEST=true
+  - services: docker
+    env:
+    - SPARK_VERSION=2.3.2
+    - NOMAD_VERSION=0.8.6
+    - JAVA_MAJOR_VERSION=8
+    - SUFFIX=20181220
+  - services: docker
+    env:
+    - SPARK_VERSION=2.2.2
+    - NOMAD_VERSION=0.8.6
+    - JAVA_MAJOR_VERSION=8
+    - SUFFIX=20181220
+  
+before_script:
+- docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}"
+
+script:
+# Docker tags to use (some are omitted since the version values are constant)
+- REF_TAG="ref"
+- REF_IMAGE="${IMAGE_NAME}:${REF_TAG}"
+
+## Spark only tags
+- SPARK_TAG="spark-${SPARK_VERSION}"
+- SPARK_MAJMIN_TAG="spark-${SPARK_VERSION:0:3}"
+
+## Spark + Nomad tags
+- NOMAD_TAG="nomad-${NOMAD_VERSION}"
+- NOMAD_MAJMIN_TAG="nomad-${NOMAD_VERSION:0:3}"
+- SPARK_NOMAD_TAG="${SPARK_TAG}_${NOMAD_TAG}"
+- SPARK_NOMAD_MAJMIN_TAG="${SPARK_TAG}_${NOMAD_MAJMIN_TAG}"
+- SPARK_MAJMIN_NOMAD_TAG="${SPARK_MAJMIN_TAG}_${NOMAD_TAG}"
+- SPARK_MAJMIN_NOMAD_MAJMIN_TAG="${SPARK_MAJMIN_TAG}_${NOMAD_MAJMIN_TAG}"
+
+## Spark + Nomad + Java tags
+- JAVA_MAJOR_TAG="java-${JAVA_MAJOR_VERSION}"
+- SPARK_NOMAD_JAVA_MAJOR_TAG="${SPARK_TAG}_${NOMAD_TAG}_${JAVA_MAJOR_TAG}"
+- SPARK_NOMAD_MAJMIN_JAVA_MAJOR_TAG="${SPARK_TAG}_${NOMAD_MAJMIN_TAG}_${JAVA_MAJOR_TAG}"
+- SPARK_MAJMIN_NOMAD_JAVA_MAJOR_TAG="${SPARK_MAJMIN_TAG}_${NOMAD_TAG}_${JAVA_MAJOR_TAG}"
+- SPARK_MAJMIN_NOMAD_MAJMIN_JAVA_MAJOR_TAG="${SPARK_MAJMIN_TAG}_${NOMAD_MAJMIN_TAG}_${JAVA_MAJOR_TAG}"
+
+# Docker build
+- |-
+  docker build . \
+    --build-arg JAVA_MAJOR_VERSION="${JAVA_MAJOR_VERSION}" \
+    --build-arg SPARK_VERSION="${SPARK_VERSION}" \
+    --build-arg NOMAD_VERSION="${NOMAD_VERSION}" \
+    --build-arg HADOOP_MAJMIN_VERSION="${HADOOP_MAJMIN_VERSION}" \
+    --build-arg SUFFIX="${SUFFIX}" \
+    -t "${REF_IMAGE}"
+
+# Docker verification
+- |-
+  docker run --rm ${REF_IMAGE} \
+    spark-submit --version
+
+# Docker re-tagging
+# Spark version is always unique across Nomad version, so all builds can tag and push independently
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_NOMAD_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_NOMAD_MAJMIN_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_MAJMIN_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_NOMAD_JAVA_MAJOR_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_NOMAD_MAJMIN_JAVA_MAJOR_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_JAVA_MAJOR_TAG}"
+- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_MAJMIN_JAVA_MAJOR_TAG}"
+
+# Docker push to registry
+- |-
+  if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
+    docker push "${IMAGE_NAME}:${SPARK_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_NOMAD_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_NOMAD_MAJMIN_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_MAJMIN_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_NOMAD_JAVA_MAJOR_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_NOMAD_MAJMIN_JAVA_MAJOR_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_JAVA_MAJOR_TAG}"
+    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_NOMAD_MAJMIN_JAVA_MAJOR_TAG}"
+  fi
+
+branches:
+  only:
+  - master
